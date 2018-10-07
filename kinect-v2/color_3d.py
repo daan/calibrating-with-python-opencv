@@ -32,21 +32,21 @@ class Color2CameraMap():
             raise OSError("error {} in mapping: MapcolorFrameToCamera.".format(
                 error_state))
 
-    def make_color_image(self, scale=6):
-        image = np.zeros((int(color_image_size[0] / scale),
-                          int(color_image_size[1] / scale)), np.uint8)
-        for iy in range(0, color_image_size[0], scale):
-            for ix in range(0, color_image_size[1], scale):
+    def make_color_image(self, divide_by=6):
+        image = np.zeros((int(color_image_size[0] / divide_by),
+                          int(color_image_size[1] / divide_by)), np.uint8)
+        for iy in range(0, color_image_size[0], divide_by):
+            for ix in range(0, color_image_size[1], divide_by):
                 z = float(self._camera_points[iy * 1920 + ix].z)
                 if math.isinf(z) or math.isnan(z):
                     z = 0
-                image[int(iy / scale), int(ix / scale)] = int(
+                image[int(iy / divide_by), int(ix / divide_by)] = int(
                     (z / 9.0) * 255)  # map 9 meters
         # apply a color map
         colored = cv2.applyColorMap(image, cv2.COLORMAP_HOT)
         return colored
 
-    def get_camera_point(self, color_point, isFlipped=False):
+    def get_camera_point(self, color_point):
         # find the coordinate in the image
         index = color_point[1] * color_image_size[1] + color_point[0]
         camera_point = self._camera_points[index]
@@ -56,26 +56,39 @@ class Color2CameraMap():
             float(camera_point.z)
         ]
 
-    def get_camera_points(self, color_points, isFlipped=False):
+    def get_camera_points(self, color_points):
         r = []
         for p in color_points:
-            r.append(self.get_camera_point(p, isFlipped))
+            r.append(self.get_camera_point(p))
         return r
 
 
 kinect = PyKinectRuntime.PyKinectRuntime(PyKinectV2.FrameSourceTypes_Color
                                          | PyKinectV2.FrameSourceTypes_Depth)
 
-color_frame_flipped = None
-
+font = cv2.FONT_HERSHEY_SIMPLEX
+        
 while (1):
     if kinect.has_new_depth_frame():
         depth_frame = kinect.get_last_depth_frame()
 
         try:
             map = Color2CameraMap(depth_frame)
-            img = map.make_color_image()
+            divide_by = 6
+            img = map.make_color_image(divide_by)
+
+            # points are in (x,y)
+            sample_point = [ int(1920/2), int(1080/2)]
+            #sample_point = [480, 240]
+            p3d = map.get_camera_point( sample_point )
+            
+            # draw a reference circle at pt
+            scaled_point = ( int( sample_point[0]/divide_by), int(sample_point[1]/divide_by) )
+            cv2.circle(img, scaled_point, int(30/divide_by), (255,255,255))
+            # print the distance.
+            cv2.putText(img," {0:.3f}".format(p3d[2]), scaled_point, font, 8/divide_by,(255,255,255),2,cv2.LINE_AA)
             cv2.imshow('color', img)
+
         except OSError as err:
             print(err)
 
