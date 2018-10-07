@@ -79,9 +79,9 @@ while (1):
 
             # points are in (x,y)
             sample_point = [ int(1920/2), int(1080/2)]
-            #sample_point = [480, 240]
+            sample_point = [480, 240]
             p3d = map.get_camera_point( sample_point )
-            
+            print(p3d)
             # draw a reference circle at pt
             scaled_point = ( int( sample_point[0]/divide_by), int(sample_point[1]/divide_by) )
             cv2.circle(img, scaled_point, int(30/divide_by), (255,255,255))
