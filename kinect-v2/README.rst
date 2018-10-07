@@ -19,10 +19,10 @@ All scripts wait until the sensor is connected. Once the video feed is shown, st
 - **infrared.py** shows the infrared frame.
 - **detect_charuco.py** detects an charuco board in the color frame. Use board.pdf in the top level data folder.
 - **color_3d** uses the coordinate mapper to get the 3D position for each pixel in the color frame. 
-The z value (away from the camera) is drawn scaled down. The depth value of the center point is indicated
+  The z value (away from the camera) is drawn scaled down. The depth value of the center point is indicated
 
 * **capture_board.py** detects the charuco board and retrieves the 3D coordinates. The space key saves the image, 
-and coordinates for the board and markers in json.
+  and coordinates for the board and markers in json.
 
 
 
