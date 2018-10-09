@@ -38,8 +38,6 @@ fs = cv2.FileStorage("calibration.json", cv2.FILE_STORAGE_READ)
 intrinsics = fs.getNode("cameraMatrix").mat()
 dist_coeffs = fs.getNode("dist_coeffs").mat()
 
-print(" xxx  ",intrinsics, dist_coeffs)
-
 args = vars(ap.parse_args())
 camera = args["camera"]
 
@@ -48,19 +46,32 @@ cap = cv2.VideoCapture(int(camera))
 print("resolution {} by {} ".format(int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT ))))
 
 
+count = 0
+tvecs = []
 
 while(True):
-    if cv2.waitKey(1) == 27: # ESC
-        cv2.destroyAllWindows()
-        break
-
     ret, frame = cap.read()
+    got_board = False
     corners, ids = find_charuco_board(frame, board, dictionary)
     if len(corners) > 0 :
         valid, rvec, tvec = cv2.aruco.estimatePoseCharucoBoard(corners, ids, board, intrinsics, dist_coeffs)
-        print(tvec)
-    
-        cv2.aruco.drawAxis(frame, intrinsics, dist_coeffs, rvec, tvec, 0.2) 
+        org_frame = np.copy(frame)
+        cv2.aruco.drawAxis(frame, intrinsics, dist_coeffs, rvec, tvec, 0.2)        
+        got_board = True
+        
+
+    key = cv2.waitKey(1)
+    if key == 27: # ESC
+        cv2.destroyAllWindows()
+        break
+    elif key == 32: # SPACE
+        if got_board:
+            print("take picture")
+            cv2.imwrite("capture_{}.jpg".format(count), org_frame)
+            tvecs.append(tvec)
+        
+        # save frame to disc
+        # add to json file
 
 
     ##if len(corners) > 0:
