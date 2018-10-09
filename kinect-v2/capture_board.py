@@ -6,7 +6,7 @@ import time
 import numpy as np
 import cv2
 import math
-
+import json
 
 squareLength = 35.0 / 1000 # chessboard square side length (normally in meters)
 markerLength = 22.0 / 1000 # marker side length (same unit than squareLength)
@@ -31,6 +31,9 @@ def find_charuco_board(img, board, dictionary):
         for corner in corners:
             cv2.cornerSubPix(gray, corner, winSize=(3,3), zeroZone=(-1,-1), criteria=corner_criteria)        
         ret, detectedCorners, detectedIds = cv2.aruco.interpolateCornersCharuco(corners,ids,gray,board)
+        if len(detectedCorners) != len(detectedIds):
+            print("should not happen")
+            return [],[]
         if detectedCorners is not None and detectedIds is not None and len(detectedCorners)>3:
              return detectedCorners, detectedIds
     return [], []    
@@ -75,12 +78,6 @@ class Color2CameraMap():
             float(camera_point.z)
         ]
 
-    def get_camera_points(self, color_points, isFlipped = False):
-        r = []
-        for p in color_points:
-            r.append(self.get_camera_point(p, isFlipped))
-        return r
-
 
 
 kinect = PyKinectRuntime.PyKinectRuntime(PyKinectV2.FrameSourceTypes_Color | PyKinectV2.FrameSourceTypes_Depth)
@@ -91,6 +88,13 @@ font = cv2.FONT_HERSHEY_SIMPLEX
 p3d = None
 p2d = None
 p2d = [480, 240]
+
+corners3d = []
+corners = []
+ids = []
+
+count = 0
+
 while(1):
 
    
@@ -102,6 +106,12 @@ while(1):
             try:
                 map = Color2CameraMap(depth_frame)            
                 p3d = map.get_camera_point( p2d, True )    
+                corners3d = []
+                for c in corners:
+                    x = round(c[0][0]) 
+                    y = round(c[0][1])
+                    c3d = map.get_camera_point( [x,y], True )  
+                    corners3d.append(c3d)
             except OSError as err:
                 print(err)
                 p3d = None
@@ -128,16 +138,6 @@ while(1):
 
             cv2.circle(color_flipped, (p2d[0], p2d[1]), 100, (255,255,255))
 
-
-        else:
-            pass
-            #p2d = None
-        #p2d = [ int(1920/2), int(1080/2)]
-        #p2d = [480, 240]
-
-        print(p2d)
-
-
         if p2d != None and p3d != None:
             # draw the coordinates
             cv2.putText(color_flipped,"{0:.3f}".format(p3d[0]), (100,200), font, 4,(0,0,255), 6, cv2.LINE_AA)
@@ -147,7 +147,30 @@ while(1):
 
         cv2.imshow('color',color_flipped)
     
-    if (cv2.waitKey(1) == 27):
+    key = cv2.waitKey(1)
+
+    if key == 27:
         cv2.destroyAllWindows()
         kinect.close()
         break
+    elif key == 32:
+        print("take picture")
+        print(len(ids), len(corners3d))
+        cv2.imwrite("frame_{}.jpg".format(count), color_flipped)
+        #write the coords
+        points = {}
+        for i in range(len(ids)):
+            p = {}
+            p['x'] = corners3d[i][0]
+            p['y'] = corners3d[i][1]
+            p['z'] = corners3d[i][2]
+            points[str(ids[i][0])] = p
+        with open("frame_{}.json".format(count), 'w') as f:
+            json.dump(points, f)
+        count += 1
+
+        
+
+        
+
+
