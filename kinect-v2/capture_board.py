@@ -8,12 +8,12 @@ import cv2
 import math
 import json
 
-squareLength = 35.0 / 1000 # chessboard square side length (normally in meters)
-markerLength = 22.0 / 1000 # marker side length (same unit than squareLength)
-squaresX = 5
-squaresY = 7
+squareLength = 50.0 / 1000 # chessboard square side length (normally in meters)
+markerLength = 30.0 / 1000 # marker side length (same unit than squareLength)
+squaresX = 11
+squaresY = 8
 
-dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_6X6_250)
+dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250)
 board = cv2.aruco.CharucoBoard_create(squaresX,squaresY,squareLength,markerLength,dictionary)
 
 depth_image_size = (424, 512)
@@ -27,10 +27,16 @@ def find_charuco_board(img, board, dictionary):
     corner_criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.00001)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(gray, dictionary) 
+
+
     if len(corners)>0:
         for corner in corners:
             cv2.cornerSubPix(gray, corner, winSize=(3,3), zeroZone=(-1,-1), criteria=corner_criteria)        
         ret, detectedCorners, detectedIds = cv2.aruco.interpolateCornersCharuco(corners,ids,gray,board)
+
+        if detectedIds is None:
+            return [], []
+
         if len(detectedCorners) != len(detectedIds):
             print("should not happen")
             return [],[]
