@@ -5,11 +5,6 @@ import PySpin
 import numpy as np
 import cv2
 
-#
-# i made this before i found this: 
-# https://github.com/nimble00/PTGREY-cameras-with-python
-#
-
 def set_trigger_mode(cam, triggerSource):
     cam.TriggerMode.SetValue(PySpin.TriggerMode_Off)
     cam.TriggerSource.SetValue(triggerSource)
