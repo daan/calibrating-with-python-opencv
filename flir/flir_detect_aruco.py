@@ -25,7 +25,6 @@ def reset_trigger_mode_software(cam):
     cam.TriggerMode.SetValue(PySpin.TriggerMode_Off)
     print("reset trigger mode")
 
-
 #
 #   setup
 #

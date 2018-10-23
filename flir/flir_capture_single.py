@@ -15,11 +15,6 @@ ap.add_argument("-c", "--camera", type=str, default="0", help="camera by id")
 
 args = vars(ap.parse_args())
 
-camera_serial = args["camera"]
-
-
-
-
 def set_trigger_mode_software(cam):
     cam.TriggerMode.SetValue(PySpin.TriggerMode_Off)
     cam.TriggerSource.SetValue(PySpin.TriggerSource_Software)
@@ -51,7 +46,11 @@ for i in range(cam_list.GetSize()):
     print("camera {} serial: {}".format(i, cam.GetUniqueID()))
 
 
-#camera_serial = "18284509"
+camera_serial = args["camera"]
+if camera_serial == "0":
+    camera_serial = cam_list.GetByIndex(0).GetUniqueID()
+    print("no camera specified (use -c), using the first one in the list {}".format(camera_serial))
+
 
 cam = cam_list.GetBySerial(camera_serial)
 
