@@ -8,12 +8,12 @@ import cv2
 import math
 import json
 
-squareLength = 50.0 / 1000 # chessboard square side length (normally in meters)
-markerLength = 30.0 / 1000 # marker side length (same unit than squareLength)
-squaresX = 11
-squaresY = 8
+squareLength = 100.0 / 1000 # chessboard square side length (normally in meters) (original: 50)
+markerLength = 60.0 / 1000 # marker side length (same unit than squareLength) (original: 30)
+squaresX = 11 #(original: 11)
+squaresY = 8 #(original: 8)
 
-dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250)
+dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250) #(original: DICT_4X4_250)
 board = cv2.aruco.CharucoBoard_create(squaresX,squaresY,squareLength,markerLength,dictionary)
 
 depth_image_size = (424, 512)
