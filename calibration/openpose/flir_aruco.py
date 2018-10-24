@@ -2,6 +2,7 @@ import sys
 import time
 import PySpin
 import os
+import json
 
 import numpy as np
 import cv2
@@ -17,15 +18,6 @@ dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250)
 board = cv2.aruco.CharucoBoard_create(squaresX,squaresY,charuco_square_length,charuco_marker_length,dictionary)
 
 
-
-filename = "models/18284509.xml"
-
-fs = cv2.FileStorage(filename, cv2.FILE_STORAGE_READ)
-
-intrinsics = fs.getNode("Intrinsics").mat()
-dist_coeffs = fs.getNode("Distortion").mat()
-
-fs.release()
 
 
 
@@ -91,6 +83,23 @@ if camera_serial == "0":
     print("no camera specified (use -c), using the first one in the list {}".format(camera_serial))
 
 
+filename = "models/{}.xml".format(camera_serial)
+
+fs = cv2.FileStorage(filename, cv2.FILE_STORAGE_READ)
+
+if fs.isOpened() == False:
+    print("couldn't open camera calibration {} aborting".format(filename))
+    sys.exit()
+
+intrinsics = fs.getNode("Intrinsics").mat()
+dist_coeffs = fs.getNode("Distortion").mat()
+
+fs.release()
+
+
+
+
+
 cam = cam_list.GetBySerial(camera_serial)
 
 try:
@@ -106,6 +115,9 @@ except:
 
 #os.mkdir(camera_serial)
 
+def makeRT(rvec, tvec):
+    rot3x3, _ = cv2.Rodrigues(rvec)
+    return{"t": { "x":tvec[0][0], "y":tvec[1][0], "z":tvec[2][0] }, "rot3x3" : rot3x3.tolist()}
 
 
 #
@@ -138,23 +150,36 @@ while 1:
         image_data = image_converted.GetData()
         frame = np.frombuffer(image_data, dtype=np.uint8)            
         frame = frame.reshape((i.GetHeight(),i.GetWidth(),3)) 
+        frame_annotated = frame.copy()
 
         corners, ids = find_charuco_board(frame, board, dictionary)
-        cv2.aruco.drawDetectedCornersCharuco(frame, corners, ids)
-        valid, rvec, tvec = cv2.aruco.estimatePoseCharucoBoard(corners, ids, board, intrinsics, dist_coeffs)
+
+        valid = False
+        if len(corners) > 0 and len(ids) > 0:
+            valid, rvec, tvec = cv2.aruco.estimatePoseCharucoBoard(corners, ids, board, intrinsics, dist_coeffs)
+            cv2.aruco.drawDetectedCornersCharuco(frame_annotated, corners, ids)
         if valid == True:
-            cv2.aruco.drawAxis(frame, intrinsics, dist_coeffs, rvec, tvec, 0.2) 
+            cv2.aruco.drawAxis(frame_annotated, intrinsics, dist_coeffs, rvec, tvec, 0.2) 
 
             p3d = [tvec[0][0], tvec[1][0], tvec[2][0]]
 
             # draw the coordinates
-            cv2.putText(frame,"{0:.3f}".format(p3d[0]), (100,200), font, 4,(0,0,255), 6, cv2.LINE_AA)
-            cv2.putText(frame,"{0:.3f}".format(p3d[1]), (100,400), font, 4,(0,255,0), 6, cv2.LINE_AA)
-            cv2.putText(frame,"{0:.3f}".format(p3d[2]), (100,600), font, 4,(255,0,0), 6, cv2.LINE_AA)
+            cv2.putText(frame_annotated,"{0:.3f}".format(p3d[0]), (100,200), font, 4,(0,0,255), 6, cv2.LINE_AA)
+            cv2.putText(frame_annotated,"{0:.3f}".format(p3d[1]), (100,400), font, 4,(0,255,0), 6, cv2.LINE_AA)
+            cv2.putText(frame_annotated,"{0:.3f}".format(p3d[2]), (100,600), font, 4,(255,0,0), 6, cv2.LINE_AA)
 
-
-
-        cv2.imshow("cam1",frame)
+            if key == 32:
+                print("save frame to disc")
+                cv2.imwrite("frame_{0:02}.jpg".format(count), frame)
+                cv2.imwrite("frame_{0:02}_annotated.jpg".format(count), frame_annotated)
+                # save the json data
+                
+                pose = makeRT(rvec, tvec)
+                filename = "frame_{0:02}.json".format(count)
+                with open(filename, "w") as write_file:
+                    json.dump( { "pose": pose }, write_file)
+                count += 1
+        cv2.imshow("cam1",frame_annotated)
     i.Release()
     del i
 
