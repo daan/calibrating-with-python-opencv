@@ -20,12 +20,24 @@ board = cv2.aruco.CharucoBoard_create(squaresX,squaresY,charuco_square_length,ch
 
 
 
-
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
-ap.add_argument("-c", "--camera", type=str, default="0", help="camera by id")
+ap.add_argument("folder", help="folder to save images")
+ap.add_argument("-c", "--camera", type=str, default="0", help="use camera by id")
+ap.add_argument("-f", "--force", action="store_true", help="force overwrite in folder")
+ap.add_argument("--fps", type=int, default=20, help="set framerate")
 
 args = vars(ap.parse_args())
+
+# make folder
+target_folder = args['folder']
+if os.path.isdir(target_folder):
+    if args['force'] == False:
+        print("{}: error: folder {} exists. Use --force to overwrite files.".format(os.path.basename(sys.argv[0]), target_folder))
+        sys.exit()
+else:
+    os.makedirs(target_folder)
+
 
 def set_trigger_mode_software(cam):
     cam.TriggerMode.SetValue(PySpin.TriggerMode_Off)

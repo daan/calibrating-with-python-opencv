@@ -146,8 +146,6 @@ last_fps = 0
 
 try:
   while 1:
-
-
     if cv2.waitKey(1) != -1:
         break
 

@@ -8,13 +8,36 @@ import cv2
 import math
 import json
 
-squareLength = 100.0 / 1000 # chessboard square side length (normally in meters) (original: 50)
-markerLength = 60.0 / 1000 # marker side length (same unit than squareLength) (original: 30)
-squaresX = 11 #(original: 11)
-squaresY = 8 #(original: 8)
+import sys
+import os
 
-dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250) #(original: DICT_4X4_250)
-board = cv2.aruco.CharucoBoard_create(squaresX,squaresY,squareLength,markerLength,dictionary)
+import argparse
+
+# construct the argument parse and parse the arguments
+ap = argparse.ArgumentParser()
+ap.add_argument("folder", help="folder to save images")
+ap.add_argument("-f", "--force", action="store_true", help="force overwrite in folder")
+
+args = vars(ap.parse_args())
+
+# make folder
+target_folder = args['folder']
+if os.path.isdir(target_folder):
+    if args['force'] == False:
+        print("{}: error: folder {} exists. Use --force to overwrite files.".format(os.path.basename(sys.argv[0]), target_folder))
+        sys.exit()
+else:
+    os.makedirs(target_folder)
+
+
+
+
+charuco_square_length = 140.0 / 1000 # chessboard square side length (normally in meters)
+charuco_marker_length = 88.0 / 1000 # marker side length (same unit than squareLength)
+squaresX = 5
+squaresY = 7
+dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250)
+board = cv2.aruco.CharucoBoard_create(squaresX,squaresY,charuco_square_length,charuco_marker_length,dictionary)
 
 depth_image_size = (424, 512)
 color_image_size = (1080, 1920)
@@ -88,7 +111,6 @@ class Color2CameraMap():
 
 kinect = PyKinectRuntime.PyKinectRuntime(PyKinectV2.FrameSourceTypes_Color | PyKinectV2.FrameSourceTypes_Depth)
 
-
 font = cv2.FONT_HERSHEY_SIMPLEX
 
 p3d = None
@@ -102,9 +124,6 @@ ids = []
 count = 0
 
 while(1):
-
-   
-
     if kinect.has_new_depth_frame():
         depth_frame = kinect.get_last_depth_frame()
 
@@ -131,12 +150,14 @@ while(1):
         color_frame = cv2.cvtColor(color_frame, cv2.COLOR_BGRA2BGR)
         color_flipped = cv2.flip(color_frame,1)
 
-        
+        color_org = color_flipped.copy()
+
+
         corners, ids = find_charuco_board(color_flipped, board, dictionary)
         if len(corners) > 0:
             cv2.aruco.drawDetectedCornersCharuco(color_flipped, corners, ids)
         
-            # draw lines to depict the first marker (maybe id_0)
+            # draw lines to depict the first marker (id_0 if not obstructed.....)
             x,y = corners[0][0][0], corners[0][0][1]
             p2d = [round(x),round(y)]
             cv2.line(color_flipped, (0,y),(1920,y),(0,0,255),2)
@@ -162,17 +183,21 @@ while(1):
     elif key == 32:
         print("take picture")
         print(len(ids), len(corners3d))
-        cv2.imwrite("frame_{}.jpg".format(count), color_flipped)
+        cv2.imwrite("{}/frame_{}_annotated.jpg".format(target_folder, count), color_flipped)
+
+        cv2.imwrite("{}/frame_{}.jpg".format(target_folder, count), color_org)
         #write the coords
-        points = {}
+        points = []
         for i in range(len(ids)):
             p = {}
+            p['id'] = str(ids[i][0])
             p['x'] = corners3d[i][0]
             p['y'] = corners3d[i][1]
             p['z'] = corners3d[i][2]
-            points[str(ids[i][0])] = p
-        with open("frame_{}.json".format(count), 'w') as f:
-            json.dump(points, f)
+            points.append(p)
+        json_data = { "charucoCorners": points }
+        with open("{}/frame_{}.json".format(target_folder, count), 'w') as f:
+            json.dump(json_data, f)
         count += 1
 
         
