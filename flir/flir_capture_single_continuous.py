@@ -13,9 +13,23 @@ import argparse
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
-ap.add_argument("-c", "--camera", type=str, default="0", help="camera by id")
+ap.add_argument("folder", help="folder to save images")
+ap.add_argument("-c", "--camera", type=str, default="0", help="use camera by id")
+ap.add_argument("-f", "--force", action="store_true", help="force overwrite in folder")
+ap.add_argument("--fps", type=int, default=20, help="set framerate")
 
 args = vars(ap.parse_args())
+
+# make folder
+target_folder = args['folder']
+if os.path.isdir(target_folder):
+    if args['force'] == False:
+        print("{}: error: folder {} exists. Use --force to overwrite files.".format(os.path.basename(sys.argv[0]), target_folder))
+        sys.exit()
+else:
+    os.makedirs(target_folder)
+
+
 
 def set_trigger_mode_software(cam):
     cam.TriggerMode.SetValue(PySpin.TriggerMode_Off)
@@ -51,7 +65,7 @@ for i in range(cam_list.GetSize()):
 camera_serial = args["camera"]
 if camera_serial == "0":
     camera_serial = cam_list.GetByIndex(0).GetUniqueID()
-    print("no camera specified (use -c), using the first one in the list {}".format(camera_serial))
+    print("no camera specified (use -c). Using the first one in the list {}".format(camera_serial))
 
 
 cam = cam_list.GetBySerial(camera_serial)
@@ -65,6 +79,13 @@ try:
 except:
     print("error initializing camera {}".format(camera_serial))
     sys.exit()
+
+fps = args["fps"]
+
+
+print("saving images to folder {}".format(target_folder))
+print("stop recording using ctr-c")
+
 
 
 class ImageWorker(threading.Thread):
@@ -109,33 +130,39 @@ class ImageWorker(threading.Thread):
                     #cv2.imwrite(filename, cvi)
 
 
-
-
 #
 #   loop
 #
 
 count = 0
-elapsed = 0
-
-os.makedirs("captures", exist_ok=True)
 
 worker = ImageWorker()
 worker.start()
 
+fps_report_frequency = fps*2
 
-blank_image = np.zeros((300,400,3), np.uint8)
-cv2.imshow("blank", blank_image)
+start = last = time.time()     
+last_fps = 0
 
-while 1:
-    key = cv2.waitKey(1)
+try:
+  while 1:
+
+
+    if cv2.waitKey(1) != -1:
+        break
+
+    # wait until 
+    while time.time() < (start + 1.0/fps):
+        time.sleep(0.01) 
 
     start = time.time()
+    last_fps += 1.0 / (start-last)
+    last = time.time()    
 
-
-    if key == 27: # ESC
-        cv2.destroyAllWindows()
-        break
+    if count % fps_report_frequency == 0:
+        print(worker.images.qsize() )
+        print("fps {0:.3f}".format( last_fps / fps_report_frequency))        
+        last_fps = 0
     
     cam.TriggerSoftware()
     i = cam.GetNextImage()
@@ -145,28 +172,14 @@ while 1:
     if i.IsIncomplete():
         pass
     else:
-        filename = "captures/cam_{0:02}.jpg".format(count)
+        filename = "{}/cam_{:06}.jpg".format(target_folder,count)
         worker.addImage( (filename, i) )            
-        # see documentation: enum ColorProcessingAlgorithm 
-        #image_converted = i.Convert(PySpin.PixelFormat_BGR8, PySpin.DIRECTIONAL_FILTER)
-        #image_converted.Save(filename)
-        #image_data = image_converted.GetData()
-        #cvi = np.frombuffer(image_data, dtype=np.uint8)            
-        #cvi = cvi.reshape((i.GetHeight(),i.GetWidth(),3)) 
-        #cv2.imshow("cam1",cvi)
-        #cv2.imwrite(filename, cvi)
         count += 1
     i.Release()
     del i
 
-    end = time.time()
-    elapsed += end - start
-    if count % 10 == 0:
-        print(worker.images.qsize() )
-        print("fps {0:.3f}".format(10 /elapsed))
-        
-        elapsed = 0
-
+except KeyboardInterrupt:
+    pass
 #
 #   cleanup
 #
