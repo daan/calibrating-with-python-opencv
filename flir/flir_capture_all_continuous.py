@@ -18,18 +18,31 @@ ap.add_argument("-m", "--master", type=str, default="18284509", help="master cam
 ap.add_argument("-f", "--force", action="store_true", help="force overwrite in folder")
 ap.add_argument("--fps", type=int, default=20, help="set framerate")
 
+ap.add_argument("--openpose",  action="store_true", help="name images for openpose (e.g. 000000000000_rendered, ..._1, ..._2, ...)")
+
 args = vars(ap.parse_args())
+
+save_for_openpose = args['openpose']
+
+fps = args["fps"]
 
 # make folder
 target_folder = args['folder']
 if os.path.isdir(target_folder):
-    if args['force'] == False:
+    if not args['force']:
         print("{}: error: folder {} exists. Use --force to overwrite files.".format(os.path.basename(sys.argv[0]), target_folder))
         sys.exit()
 else:
     os.makedirs(target_folder)
 
 
+
+def set_fps(cam, fps):
+    print("current acquisitionFrameRate", cam.AcquisitionFrameRate.GetValue() )
+    cam.AcquisitionFrameRateEnable.SetValue(True)
+    print("acquisitionFrameRate Enable", cam.AcquisitionFrameRateEnable.GetValue() )
+    cam.AcquisitionFrameRate.SetValue(fps)
+    print("acquisitionFrameRate set to", cam.AcquisitionFrameRate.GetValue() )
 
 def set_trigger_mode(cam, triggerSource):
     cam.TriggerMode.SetValue(PySpin.TriggerMode_Off)
@@ -78,7 +91,8 @@ for i in range(cam_list.GetSize()):
         if cam_id == master_id:
             print("master: {}".format(cam_id))
             master = cam
-            set_trigger_mode(cam, PySpin.TriggerSource_Software)
+            #set_trigger_mode(cam, PySpin.TriggerSource_Software)
+            set_fps(cam, fps)
         else:
             print("follower: {}".format(cam_id))
             set_trigger_mode(cam, PySpin.TriggerSource_Line3)
@@ -141,74 +155,89 @@ class ImageWorker(threading.Thread):
 
 count = 0
 
-worker = ImageWorker()
-worker.start()
+workers = []
 
-fps = args["fps"]
+for i in range(len(cameras)):
+    worker = ImageWorker()
+    worker.start()
+    workers.append(worker)
+
+count = 0
 fps_report_frequency = fps*2
+start_time = time.time()     
 
-start = last = time.time()     
-last_fps = 0
+try:
+    while 1:
+        if cv2.waitKey(1) != -1:
+            break
 
-while 1:
-    if cv2.waitKey(1) != -1:
-        break
+        if count % fps_report_frequency == 0:        
+            fps = fps_report_frequency / (time.time() - start_time) # / fps_report_frequency
+            print("fps {:.3f} image count {}, in buffer {}".format(fps, count,workers[0].images.qsize() ))        
+            start_time = time.time()
 
-    # wait until 
-    while time.time() < (start + 1.0/fps):
-        time.sleep(0.01) 
+        for n in range(len(cameras)):
+            cam = cameras[n]
+            try:
+                i = cam.GetNextImage()
+                #print(i.GetWidth(), i.GetHeight(), i.GetBitsPerPixel())
 
-    start = time.time()
-    last_fps += 1.0 / (start-last)
-    last = time.time()    
+                if i.IsIncomplete():
+                    pass
+                else:            
+                    cam_id = cam.GetUniqueID()
 
-    if count % fps_report_frequency == 0:
-        print(worker.images.qsize() )
-        print("fps {0:.3f}".format( last_fps / fps_report_frequency))        
-        last_fps = 0
+                    if save_for_openpose:
+                        if n == 0:
+                            filename = "{}/{:012}_rendered.jpg".format(target_folder, count)
+                        else:
+                            filename = "{}/{:012}_rendered_{}.jpg".format(target_folder, count, n)
+                    else:
+                        filename = "{}/cam_{}__{:06}.jpg".format(target_folder, cam_id, count)
+                    workers[n].addImage( (filename, i) )
 
-    try:
-        master.TriggerSoftware.Execute()
-        count += 1
-    except PySpin.SpinnakerException as ex:
-        print("Error: {}".format(ex))
+                    if cam_id == master_id:
+                        count += 1
 
-    for cam in cameras:
-        try:
-            i = cam.GetNextImage()
-            #print(i.GetWidth(), i.GetHeight(), i.GetBitsPerPixel())
-
-            if i.IsIncomplete():
-                pass
-            else:            
-                cam_id = cam.GetUniqueID()
-                filename = "captures/cam_{}__{}.jpg".format(cam_id, count)
-                worker.addImage( (filename, i) )            
-            i.Release()
-            del i
-        except PySpin.SpinnakerException as ex:
-            print("Error: {}".format(ex))
-
+                i.Release()
+                del i
+            except PySpin.SpinnakerException as ex:
+                print("Error: {}".format(ex))
+except KeyboardInterrupt:
+    pass
 #
 #   cleanup
 #
 
-worker.stop()
+for w in workers:
+    w.stop()
 
 while(1):
-    print("{} images to be processed. waiting for thread to finish".format(worker.images.qsize()))
+    report = ""
+    for w in workers:
+        report = report + " {}".format(w.images.qsize())
+
+    print("{} images to be processed. waiting for thread to finish".format(report))
     time.sleep(0.5)
-    if worker.images.empty():
+
+    done = True
+    for w in workers:
+        if not w.images.empty():
+            done = False 
+    if done:
         break
+
+
+master = None
 
 for cam in cameras:
     cam.EndAcquisition()
     reset_trigger_mode_software(cam)
     cam.DeInit()
     del cam
+
 del cameras
 del cam_list
 
 system.ReleaseInstance()
 del system
-
