@@ -16,9 +16,13 @@ ap = argparse.ArgumentParser()
 ap.add_argument("folder", help="folder to save images")
 ap.add_argument("-c", "--camera", type=str, default="0", help="use camera by id")
 ap.add_argument("-f", "--force", action="store_true", help="force overwrite in folder")
-ap.add_argument("--fps", type=int, default=20, help="set framerate")
+ap.add_argument("--fps", type=int, default=20, help="set framerate in Hertz")
 
 args = vars(ap.parse_args())
+
+fps = args["fps"]
+
+
 
 # make folder
 target_folder = args['folder']
@@ -29,6 +33,12 @@ if os.path.isdir(target_folder):
 else:
     os.makedirs(target_folder)
 
+def set_fps(cam, fps):
+    print("current acquisitionFrameRate", cam.AcquisitionFrameRate.GetValue() )
+    cam.AcquisitionFrameRateEnable.SetValue(True)
+    print("acquisitionFrameRate Enable", cam.AcquisitionFrameRateEnable.GetValue() )
+    cam.AcquisitionFrameRate.SetValue(fps)
+    print("acquisitionFrameRate set to", cam.AcquisitionFrameRate.GetValue() )
 
 
 def set_trigger_mode_software(cam):
@@ -73,14 +83,18 @@ cam = cam_list.GetBySerial(camera_serial)
 try:
     cam.Init()
     cam.AcquisitionMode.SetValue(PySpin.AcquisitionMode_Continuous)
-    set_trigger_mode_software(cam)
+
+    # we now disable the trigger mode and let the camera capture at fps 
+    # set_trigger_mode_software(cam)
+    reset_trigger_mode_software(cam)
+    set_fps(cam, fps)
+
     cam.BeginAcquisition()
 
 except:
     print("error initializing camera {}".format(camera_serial))
     sys.exit()
 
-fps = args["fps"]
 
 
 print("saving images to folder {}".format(target_folder))
@@ -134,37 +148,28 @@ class ImageWorker(threading.Thread):
 #   loop
 #
 
-count = 0
 
 worker = ImageWorker()
 worker.start()
 
+count = 0
 fps_report_frequency = fps*2
-
-start = last = time.time()     
-last_fps = 0
+start_time = time.time()     
 
 try:
   while 1:
     if cv2.waitKey(1) != -1:
         break
 
-    # wait until 
-    while time.time() < (start + 1.0/fps):
-        time.sleep(0.01) 
-
-    start = time.time()
-    last_fps += 1.0 / (start-last)
-    last = time.time()    
-
-    if count % fps_report_frequency == 0:
-        print(worker.images.qsize() )
-        print("fps {0:.3f}".format( last_fps / fps_report_frequency))        
-        last_fps = 0
+    if count % fps_report_frequency == 0:        
+        fps = fps_report_frequency / (time.time() - start_time) # / fps_report_frequency
+        print("fps {:.3f} image count {}, in buffer {}".format(fps, count,worker.images.qsize() ))        
+        start_time = time.time()
     
-    cam.TriggerSoftware()
+    #cam.TriggerSoftware()
     i = cam.GetNextImage()
-        #print(i.GetWidth(), i.GetHeight(), i.GetBitsPerPixel())
+    #print("new one", count)
+    #print(i.GetWidth(), i.GetHeight(), i.GetBitsPerPixel())
     cvi = None 
 
     if i.IsIncomplete():

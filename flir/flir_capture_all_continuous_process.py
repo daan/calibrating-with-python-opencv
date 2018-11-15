@@ -7,7 +7,8 @@ import numpy as np
 import cv2
 
 from queue import Queue
-import threading
+
+from multiprocessing import Process
 
 import argparse
 

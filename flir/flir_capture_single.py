@@ -46,6 +46,7 @@ for i in range(cam_list.GetSize()):
     print("camera {} serial: {}".format(i, cam.GetUniqueID()))
 
 
+
 camera_serial = args["camera"]
 if camera_serial == "0":
     camera_serial = cam_list.GetByIndex(0).GetUniqueID()
@@ -84,9 +85,10 @@ while 1:
         cv2.destroyAllWindows()
         break
     
-    cam.TriggerSoftware()
+    #cam.TriggerSoftware()
     i = cam.GetNextImage()
-        #print(i.GetWidth(), i.GetHeight(), i.GetBitsPerPixel())
+    print(count)
+    #print(i.GetWidth(), i.GetHeight(), i.GetBitsPerPixel())
     cvi = None 
 
     if i.IsIncomplete():
