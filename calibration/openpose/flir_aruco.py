@@ -51,6 +51,16 @@ def reset_trigger_mode_software(cam):
     print("reset trigger mode")
 
 
+def find_aruco_corners(img, dictionary):
+    corner_criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.00001)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(gray, dictionary)    
+    if len(corners)>0:
+        for corner in corners:
+            cv2.cornerSubPix(gray, corner, winSize=(3,3), zeroZone=(-1,-1), criteria=corner_criteria)        
+        return corners, ids, rejectedImgPoints
+
 
 def find_charuco_board(img, board, dictionary):
     corner_criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.00001)
@@ -130,8 +140,13 @@ except:
 def makeRT(rvec, tvec):
     rot3x3, _ = cv2.Rodrigues(rvec)
     return{"t": { "x":tvec[0][0], "y":tvec[1][0], "z":tvec[2][0] }, "rot3x3" : rot3x3.tolist()}
-
-
+    
+def makeMarkersJson(rvecs, tvecs, ids):
+    ret = []
+    for i in range(len(rvecs)):
+        rot3x3, _ = cv2.Rodrigues(rvecs[i])
+        ret.append( {"id": int(ids[i][0]), "t": { "x":tvecs[i][0][0], "y":tvecs[i][0][1], "z":tvecs[i][0][2] }, "rot3x3" : rot3x3.tolist()} )
+    return ret
 #
 #   loop
 #
@@ -170,26 +185,34 @@ while 1:
         if len(corners) > 0 and len(ids) > 0:
             valid, rvec, tvec = cv2.aruco.estimatePoseCharucoBoard(corners, ids, board, intrinsics, dist_coeffs)
             cv2.aruco.drawDetectedCornersCharuco(frame_annotated, corners, ids)
+ 
+            corners2, ids2, _ = find_aruco_corners(frame, dictionary)
+            cv2.aruco.drawDetectedMarkers(frame_annotated, corners2, ids2)
+            rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(corners2, charuco_marker_length, intrinsics, dist_coeffs)
+            for n in range(len(tvecs)):
+                cv2.aruco.drawAxis(frame_annotated, intrinsics, dist_coeffs, rvecs[n], tvecs[n], 0.1)
+
         if valid == True:
             cv2.aruco.drawAxis(frame_annotated, intrinsics, dist_coeffs, rvec, tvec, 0.2) 
 
             p3d = [tvec[0][0], tvec[1][0], tvec[2][0]]
 
             # draw the coordinates
-            cv2.putText(frame_annotated,"{0:.3f}".format(p3d[0]), (100,200), font, 4,(0,0,255), 6, cv2.LINE_AA)
-            cv2.putText(frame_annotated,"{0:.3f}".format(p3d[1]), (100,400), font, 4,(0,255,0), 6, cv2.LINE_AA)
-            cv2.putText(frame_annotated,"{0:.3f}".format(p3d[2]), (100,600), font, 4,(255,0,0), 6, cv2.LINE_AA)
+            cv2.putText(frame_annotated,"{:.3f}".format(p3d[0]), (100,200), font, 4,(0,0,255), 6, cv2.LINE_AA)
+            cv2.putText(frame_annotated,"{:.3f}".format(p3d[1]), (100,400), font, 4,(0,255,0), 6, cv2.LINE_AA)
+            cv2.putText(frame_annotated,"{:.3f}".format(p3d[2]), (100,600), font, 4,(255,0,0), 6, cv2.LINE_AA)
 
             if key == 32:
                 print("save frame to disc")
-                cv2.imwrite("frame_{0:02}.jpg".format(count), frame)
-                cv2.imwrite("frame_{0:02}_annotated.jpg".format(count), frame_annotated)
+                cv2.imwrite("{}/frame_{:02}.jpg".format(target_folder, count), frame)
+                cv2.imwrite("{}/frame_{:02}_annotated.jpg".format(target_folder, count), frame_annotated)
                 # save the json data
-                
+                markers = makeMarkersJson(rvecs, tvecs, ids2)
+                # board    
                 pose = makeRT(rvec, tvec)
-                filename = "frame_{0:02}.json".format(count)
+                filename = "{}/frame_{:02}.json".format(target_folder, count)
                 with open(filename, "w") as write_file:
-                    json.dump( { "pose": pose }, write_file)
+                    json.dump( { "pose": pose, "markers" : markers }, write_file)
                 count += 1
         cv2.imshow("cam1",frame_annotated)
     i.Release()
