@@ -155,14 +155,14 @@ class ImageWorker(threading.Thread):
 
 count = 0
 
-workers = []
 
-for i in range(len(cameras)):
-    worker = ImageWorker()
-    worker.start()
-    workers.append(worker)
 
-count = 0
+worker = ImageWorker()
+worker.start()
+
+
+images = [None, None, None]
+
 fps_report_frequency = fps*2
 start_time = time.time()     
 
@@ -173,18 +173,36 @@ try:
 
         if count % fps_report_frequency == 0:        
             fps = fps_report_frequency / (time.time() - start_time) # / fps_report_frequency
-            print("fps {:.3f} image count {}, in buffer {}".format(fps, count,workers[0].images.qsize() ))        
+            print("fps {:.3f} image count {}, in buffer {}".format(fps, count,worker.images.qsize() ))        
             start_time = time.time()
+
+        
 
         for n in range(len(cameras)):
             cam = cameras[n]
             try:
-                i = cam.GetNextImage()
+                # milliseconds.
+                try:
+                    if n == 0:
+                        i = cam.GetNextImage()
+                    else:
+                        i = cam.GetNextImage(20)
                 #print(i.GetWidth(), i.GetHeight(), i.GetBitsPerPixel())
+                except PySpin.SpinnakerException as ex:
+                    print("none")
+                    continue
 
                 if i.IsIncomplete():
+                    print("incomplete")
                     pass
-                else:            
+                else:
+                    if n == 0:
+                        print("new frame")
+                        count += 1
+                        images = [None, None, None]
+
+                    print(n, time.time() )            
+
                     cam_id = cam.GetUniqueID()
 
                     if save_for_openpose:
@@ -194,37 +212,40 @@ try:
                             filename = "{}/{:012}_rendered_{}.jpg".format(target_folder, count, n)
                     else:
                         filename = "{}/cam_{}__{:06}.jpg".format(target_folder, cam_id, count)
-                    workers[n].addImage( (filename, i) )
+                    #print(filename, count[n], cam_id)
+                    
+                    images[n] = (filename, i)
+                    #worker.addImage( (filename, i) )
 
-                    if cam_id == master_id:
-                        count += 1
 
                 i.Release()
                 del i
             except PySpin.SpinnakerException as ex:
                 print("Error: {}".format(ex))
+        # after a capture round of all cameras. 
+        if (images[0] is not None) and (images[1] is not None) and (images[2] is not None):
+            print("got three images")
+            worker.addImage( images[0])
+            worker.addImage( images[1])
+            worker.addImage( images[2])
+
+
+    
 except KeyboardInterrupt:
     pass
 #
 #   cleanup
 #
 
-for w in workers:
-    w.stop()
+worker.stop()
 
 while(1):
-    report = ""
-    for w in workers:
-        report = report + " {}".format(w.images.qsize())
-
-    print("{} images to be processed. waiting for thread to finish".format(report))
+ 
+    print("{} images to be processed. waiting for thread to finish".format(worker.images.qsize()))
     time.sleep(0.5)
 
     done = True
-    for w in workers:
-        if not w.images.empty():
-            done = False 
-    if done:
+    if worker.images.empty():
         break
 
 

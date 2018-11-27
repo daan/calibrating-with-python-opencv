@@ -10,8 +10,8 @@ import cv2
 import argparse
 
 
-charuco_square_length = 140.0 / 1000 # chessboard square side length (normally in meters)
-charuco_marker_length = 88.0 / 1000 # marker side length (same unit than squareLength)
+charuco_square_length = 138.0 / 1000 # chessboard square side length (normally in meters)
+charuco_marker_length = 87.0 / 1000 # marker side length (same unit than squareLength)
 squaresX = 5
 squaresY = 7
 dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250)
